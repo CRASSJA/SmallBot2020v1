@@ -1,0 +1,252 @@
+#include <kipr/wombat.h>
+
+//Variables
+int armservo = 0;
+int clawservo = 1;
+int microservo = 3;
+int ltophat;
+int lmotor = 1;
+int rmotor = 0;
+int button = 0;
+int leftside, left = 0;
+int rightside, right = 1;
+int inchestoticks = 286;
+int degtoticks = 1;
+int offset = 0;
+int black = 2800;
+int i;
+
+//Servo positions
+int armup = 2000;
+int armdown = 800;
+int clawopen = 1500;
+int clawclose = 900;
+int microopen = 1900;
+int microclose = 0; 
+
+//Functions
+void drive(int speed, int inches);
+void pivotturn(int speed, int deg);
+void gotilltape(int speed);
+void pause(int msec);
+void driveb(int speed, int msec);
+void linefollow(int inches, int side);
+void drivebutton();
+void startservo();
+void servomove(int port, int position);
+void slowservo(int port, int position);
+
+int main()
+{
+    enable_servos();
+    //wait_for_light(0);
+    //*
+    //Get to pipe near coupler
+    servomove(armservo, armup);
+    servomove(clawservo, clawclose);
+    servomove(microservo, microopen);
+    pivotturn(right, 50);
+    drivebutton();
+    
+    //Grab coupler and place it under bridge
+    driveb(1000, 1);//back up
+    pivotturn(left, 80);//turn counterclockwise to hook material tarnsport
+    servomove(microservo, 320);
+    pivotturn(left, 110);//turn to face bot towards mineral lab
+    drive(1000, 12);//drive 14 in
+    pivotturn(right, 90);
+    linefollow(25, rightside);
+    servomove(microservo, microopen);//open side arm to let transport go
+    
+    //Return to pipe near starting box
+    pivotturn(-1000, 20);//turn to avoid transport
+    driveb(1000, 1200);
+    pivotturn(right, 80);
+    servomove(microservo, microclose);
+    driveb(1000, 300);//drive back 1 second
+    pivotturn(right, 60);
+    linefollow(20, rightside);
+    drivebutton();
+    pivotturn(left, 85);
+    drivebutton();
+    pivotturn(left, 80);
+    
+    //Go up the ramp and to the mine
+    linefollow(34, leftside);
+    pivotturn(left, 40);
+    drive(1000, 6);
+    pivotturn(left, 20);
+    linefollow(10, leftside);
+    
+    //Reach into the mine and get the titanium oxide
+    servomove(armservo, armdown);
+    pause(100);
+    linefollow(8, leftside);
+    pause(100);
+    servomove(armservo, 400);
+    servomove(clawservo, 1800);
+    pivotturn(right, 5);
+    for(i = get_servo_position(armservo); i > 1; i = i - 2)
+    {
+        set_servo_position(armservo, i);
+        mav(lmotor, 250);
+        mav(rmotor, 250);
+        msleep(10);
+    }
+    servomove(clawservo, clawclose);
+    for(i = get_servo_position(armservo); i < 950; i = i + 2)
+    {
+        set_servo_position(armservo, i);
+        mav(lmotor, -250);
+        mav(rmotor, -250);
+        msleep(10);
+    }
+    
+    driveb(1000, 2500);
+    pivotturn(right, 80);
+    driveb(1000, 1400);
+    pivotturn(right, 60);
+    slowservo(armservo, 500);
+    servomove(clawservo, clawopen);
+    
+    //*/
+    
+    disable_servos();
+    return 0;
+}
+void drive(speed, inches)
+{
+    cmpc(lmotor);
+    while((gmpc(lmotor)) < inches * inchestoticks)
+    {
+        mav(lmotor, speed);
+        mav(rmotor,speed- offset);
+        msleep(10);
+    }
+    pause(50);
+}
+
+void driveb(speed, msec)
+{
+    mav(lmotor, -speed);
+    mav(rmotor,-speed  +offset );
+    msleep(msec);
+    pause(100);
+}
+
+void pivotturn(direction, deg)
+{
+    if(direction == left)
+    {
+        mav(lmotor, -1000);
+        mav(rmotor, 1000);
+        msleep(deg * 17.35);
+    }
+    else
+    {
+        mav(lmotor, 1000);
+        mav(rmotor, -1000);
+        msleep(deg * 17.35);
+    }
+    pause(100);
+}
+
+void pause(msec)
+{
+    freeze(lmotor);
+    freeze(rmotor);
+    msleep(msec);
+}
+
+void drivebutton()
+{
+    while(digital(0) == 0)
+    {
+        mav(lmotor, 1000);
+        mav(rmotor, 1000);
+    }
+    pause(100);
+}
+
+void servomove(port, position)
+{
+    set_servo_position(port, position);
+    msleep(250);
+}
+
+void slowservo(port, position)
+{
+    pause(100);
+    if(get_servo_position(port) < position)
+    {
+        for(i = get_servo_position(port); i < position; i = i + 2)
+        {
+            set_servo_position(port, i);
+            msleep(10);
+        }
+    }
+    else if(get_servo_position(port) > position)
+    {
+        for(i = get_servo_position(port); i > position; i = i - 2)
+        {
+            set_servo_position(port, i);
+            msleep(10);
+        }
+    }
+}
+
+//The higher the output value, the more black the surface is
+void linefollow(inches, side)
+{
+    cmpc(lmotor);
+    if(side == rightside)
+    {
+        while((gmpc(lmotor)) < inches * inchestoticks)
+        {
+           if(analog(0) > black)
+            {
+                mav(lmotor, 1000);
+                mav(rmotor, 800);
+            }
+            else
+            {
+                mav(lmotor, 800);
+                mav(rmotor, 1000);
+            }
+    	}
+    }
+    else
+    {
+        while((gmpc(lmotor)) < inches * inchestoticks)
+        {
+           if(analog(0) < black)
+            {
+                mav(lmotor, 1000);
+                mav(rmotor, 800);
+            }
+            else
+            {
+                mav(lmotor, 800);
+                mav(rmotor, 1000);
+            }
+        }
+    }
+}
+
+void gotilltape(speed)
+{
+    while(analog(ltophat) < black)
+    {
+        if(speed > 0)
+        {
+            mav(lmotor, speed- offset);
+            mav(rmotor, speed);
+
+        }
+        else if(analog(ltophat) > black)
+        {
+            pause(50);
+        }
+    }
+    pause(100);
+}
